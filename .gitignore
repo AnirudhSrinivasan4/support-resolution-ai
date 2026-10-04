@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.idea/
+.vscode/
+.fleet/
+.history/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local datasets and generated artifacts
+data/raw/
+data/processed/
+data/local/
+*.csv
+*.tsv
+*.jsonl
+*.parquet
+*.feather
+*.arrow
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.duckdb
