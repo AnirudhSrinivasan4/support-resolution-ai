@@ -2,7 +2,13 @@
 
 from typing import Protocol, Sequence, TypeVar
 
-from app.domain.models import SearchHit, SearchQuery, SourceDocument
+from app.domain.models import (
+    HistoricalTicket,
+    IngestionBatchResult,
+    SearchHit,
+    SearchQuery,
+    SourceDocument,
+)
 
 T = TypeVar("T")
 
@@ -41,3 +47,11 @@ class SourceRepository(Protocol):
     def upsert(self, documents: Sequence[SourceDocument]) -> None: ...
 
     def get(self, source_id: str) -> SourceDocument | None: ...
+
+
+class HistoricalTicketRepository(Protocol):
+    """Idempotently persist a batch from one historical dataset split."""
+
+    def upsert_many(
+        self, tickets: Sequence[HistoricalTicket]
+    ) -> IngestionBatchResult: ...

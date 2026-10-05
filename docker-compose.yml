@@ -6,7 +6,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://support:local-development-only@db:5432/support}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://support:local-development-only@db:5432/support}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
     depends_on:

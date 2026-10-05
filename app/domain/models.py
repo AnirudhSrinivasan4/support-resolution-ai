@@ -61,3 +61,48 @@ class ResolutionDraft:
     steps: tuple[ResolutionStep, ...] = ()
     abstained: bool = False
     escalation_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalTicketTag:
+    """A non-empty source tag and its original one-based tag column position."""
+
+    position: int
+    value: str
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalTicket:
+    """A historical support ticket with stable source provenance."""
+
+    source_dataset: str
+    source_split: str
+    source_record_id: str
+    source_revision: str | None
+    subject: str | None
+    body: str | None
+    answer: str | None
+    ticket_type: str | None
+    queue: str | None
+    priority: str | None
+    language: str | None
+    version: str | None
+    tags: tuple[HistoricalTicketTag, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class IngestionBatchResult:
+    """Counts for one persisted batch."""
+
+    processed: int = 0
+    inserted: int = 0
+    updated: int = 0
+    unchanged: int = 0
+
+    def __add__(self, other: "IngestionBatchResult") -> "IngestionBatchResult":
+        return IngestionBatchResult(
+            processed=self.processed + other.processed,
+            inserted=self.inserted + other.inserted,
+            updated=self.updated + other.updated,
+            unchanged=self.unchanged + other.unchanged,
+        )

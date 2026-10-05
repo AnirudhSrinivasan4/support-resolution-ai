@@ -1,6 +1,16 @@
 # Architecture
 
-## Intended request flow
+## Historical ticket ingestion
+
+`python -m app.ingestion.cli <saved-dataset-path>` loads the Hugging Face `DatasetDict` from disk, reads only `train`, validates the core columns, maps optional values to SQL `NULL`, and writes bounded batches through a repository protocol. The source dataset identifier, split, row index, and saved dataset fingerprint are retained for provenance. The real corpus remains external to the repository.
+
+The persistence schema has a `historical_tickets` table with a surrogate integer primary key and a unique `(source_dataset, source_split, source_record_id)` key. The latter makes repeat imports idempotent. Original subject, body, and agent answer text are stored without trimming or rewriting. The answer remains historical evidence, not a verified resolution. The source does not provide a ticket-created timestamp, so the schema records only first-ingested and last-seen timestamps.
+
+Tags live in `historical_ticket_tags` with one-based source column positions and a `(ticket_id, position)` primary key. This preserves sparse tag positions and permits indexed tag lookup. Metadata indexes cover ticket type, queue, priority, and language.
+
+The ingestion implementation depends on a historical-ticket repository interface. A future telecom knowledge-base ingestion flow can implement its own source model and repository without changing this dataset adapter or recasting historical tickets as telecom content.
+
+## Intended resolution request flow
 
 The planned API accepts a raw complaint, obtains a structured analysis (intent/category, product, severity, and sentiment), retrieves relevant sources, reranks candidates, and asks an LLM to draft a step-by-step response grounded in those sources. A citation validator checks that citations refer to retrieved source identifiers. If evidence or confidence is insufficient, the response should abstain or recommend escalation for agent review.
 
@@ -20,7 +30,7 @@ flowchart LR
     Search --> Store
 ```
 
-This diagram describes the target design, not implemented functionality. The initial deployment can remain a single API service with clear Python module boundaries. A separate ingestion worker can be introduced when data refresh needs it.
+This diagram describes the future resolution flow, not implemented functionality. The initial deployment can remain a single API service with clear Python module boundaries. A separate ingestion worker can be introduced when data refresh needs it.
 
 ## Module boundaries
 
