@@ -106,3 +106,45 @@ class IngestionBatchResult:
             updated=self.updated + other.updated,
             unchanged=self.unchanged + other.unchanged,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TicketEmbeddingCandidate:
+    """Ticket text and any matching-model embedding metadata needed for reuse."""
+
+    ticket_id: int
+    subject: str | None
+    body: str | None
+    existing_source_text_hash: str | None = None
+    existing_dimension: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TicketEmbedding:
+    """A vector derived from one ticket's subject and body."""
+
+    ticket_id: int
+    model_identifier: str
+    dimension: int
+    source_text_hash: str
+    vector: Sequence[float]
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingBatchResult:
+    """Progress counters from a bounded embedding run."""
+
+    processed: int = 0
+    embedded: int = 0
+    reused: int = 0
+    skipped_no_text: int = 0
+    errors: int = 0
+
+    def __add__(self, other: "EmbeddingBatchResult") -> "EmbeddingBatchResult":
+        return EmbeddingBatchResult(
+            processed=self.processed + other.processed,
+            embedded=self.embedded + other.embedded,
+            reused=self.reused + other.reused,
+            skipped_no_text=self.skipped_no_text + other.skipped_no_text,
+            errors=self.errors + other.errors,
+        )

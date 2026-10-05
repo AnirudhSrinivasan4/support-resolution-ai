@@ -10,6 +10,14 @@ Tags live in `historical_ticket_tags` with one-based source column positions and
 
 The ingestion implementation depends on a historical-ticket repository interface. A future telecom knowledge-base ingestion flow can implement its own source model and repository without changing this dataset adapter or recasting historical tickets as telecom content.
 
+## Historical ticket embedding pipeline
+
+`python -m app.embeddings.cli` coordinates the existing `EmbeddingProvider` port, a Sentence Transformers adapter, and a ticket embedding repository. It reads `historical_tickets` in primary-key order with bounded pages, builds model input from subject/body only, hashes the exact source fields, and writes each generated batch in its own transaction. Empty subject/body pairs are explicitly skipped and stale vectors are deleted if text later becomes empty. Existing vectors are reused only when model identifier, dimension, and source hash still match.
+
+The configurable default model is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` because the current historical corpus includes German and English records. The adapter loads it locally and derives its output dimension at runtime. `historical_ticket_embeddings` supports multiple model identifiers and stores dimension and text hash with each vector. The migration uses an unconstrained pgvector column; after model load, the repository creates a cosine HNSW expression index for that model and actual dimension. This avoids hardcoding model width in the schema while keeping each index dimension-specific. Pin `EMBEDDING_MODEL_REVISION` for reproducible model identity.
+
+The historical `answer` is not part of the embedding input. The source dataset is heterogeneous public support data, not telecom-specific; vectors represent historical subject/body text, not validated solutions.
+
 ## Intended resolution request flow
 
 The planned API accepts a raw complaint, obtains a structured analysis (intent/category, product, severity, and sentiment), retrieves relevant sources, reranks candidates, and asks an LLM to draft a step-by-step response grounded in those sources. A citation validator checks that citations refer to retrieved source identifiers. If evidence or confidence is insufficient, the response should abstain or recommend escalation for agent review.

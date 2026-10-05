@@ -14,6 +14,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 
 class Base(DeclarativeBase):
@@ -77,3 +78,33 @@ class HistoricalTicketTagRecord(Base):
     position: Mapped[int] = mapped_column(Integer, primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
     ticket: Mapped[HistoricalTicketRecord] = relationship(back_populates="tags")
+
+
+class HistoricalTicketEmbeddingRecord(Base):
+    """A model-version-specific vector for a historical ticket."""
+
+    __tablename__ = "historical_ticket_embeddings"
+    __table_args__ = (
+        CheckConstraint("embedding_dimension > 0", name="ck_ticket_embedding_dimension"),
+        UniqueConstraint(
+            "ticket_id", "model_identifier", name="uq_ticket_embedding_model"
+        ),
+        Index("ix_ticket_embeddings_model", "model_identifier"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[int] = mapped_column(
+        ForeignKey("historical_tickets.id", ondelete="CASCADE"), nullable=False
+    )
+    model_identifier: Mapped[str] = mapped_column(String(512), nullable=False)
+    embedding_dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector().with_variant(Text(), "sqlite"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

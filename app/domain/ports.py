@@ -8,6 +8,8 @@ from app.domain.models import (
     SearchHit,
     SearchQuery,
     SourceDocument,
+    TicketEmbedding,
+    TicketEmbeddingCandidate,
 )
 
 T = TypeVar("T")
@@ -16,7 +18,27 @@ T = TypeVar("T")
 class EmbeddingProvider(Protocol):
     """Convert text into vectors using a replaceable embedding model."""
 
+    @property
+    def model_identifier(self) -> str: ...
+
+    @property
+    def dimension(self) -> int: ...
+
     def embed(self, texts: Sequence[str]) -> Sequence[Sequence[float]]: ...
+
+
+class TicketEmbeddingRepository(Protocol):
+    """Read source tickets and persist embeddings in bounded batches."""
+
+    def load_batch(
+        self, *, after_ticket_id: int, limit: int, model_identifier: str
+    ) -> Sequence[TicketEmbeddingCandidate]: ...
+
+    def upsert_many(self, embeddings: Sequence[TicketEmbedding]) -> None: ...
+
+    def delete_for_tickets(self, ticket_ids: Sequence[int], model_identifier: str) -> None: ...
+
+    def ensure_vector_index(self, model_identifier: str, dimension: int) -> None: ...
 
 
 class LLMProvider(Protocol):
