@@ -4,7 +4,7 @@ A production-minded prototype for helping support agents understand a complaint,
 
 ## Current state
 
-The current milestones add saved Hugging Face dataset ingestion and a local historical-ticket embedding pipeline backed by PostgreSQL/pgvector. Retrieval, reranking, LLM calls, and resolution generation are still out of scope.
+The current milestones add saved Hugging Face dataset ingestion, a local historical-ticket embedding pipeline, and semantic retrieval backed by PostgreSQL/pgvector. Hybrid retrieval, reranking, LLM calls, and resolution generation are still out of scope.
 
 The historical corpus is a filtered subset of a heterogeneous public customer-support dataset (approximately 61k tickets before filtering). It is **not telecom-specific**. Telecom-specific guidance will live in a separate knowledge base. Historical answers are imperfect historical support evidence, not verified resolutions or ground truth.
 
@@ -56,6 +56,18 @@ python -m app.embeddings.cli --batch-size 64
 PostgreSQL must have the pgvector extension available; this project's Compose database image includes it. The migration enables the extension and adds `historical_ticket_embeddings`, keyed uniquely by ticket and model identifier. Each row also stores model dimension, source-text SHA-256, and timestamps. The pipeline reads tickets by primary-key pages and commits each batch separately. It reuses an embedding only when the model identifier, dimension, and exact subject/body hash match; changed text is regenerated, and an existing vector is removed if the source becomes empty. HNSW cosine indexes are created for the actual loaded model dimension and identifier so the migration does not guess vector width.
 
 The command prints JSON counters (`processed`, `embedded`, `reused`, `skipped_no_text`, `errors`), model identifier, dimension, and runtime. It logs periodic batch progress without ticket contents. Embeddings for different configured model identifiers can coexist, allowing later model changes without overwriting prior vectors. The historical dataset is still a heterogeneous public support corpus, not telecom data, and historical answers remain imperfect evidence.
+
+## Semantic retrieval
+
+POST /v1/retrieval/semantic embeds a complaint with the same configured multilingual Sentence Transformers model used for stored vectors, then asks PostgreSQL/pgvector for the nearest historical tickets. The query and index must share the same model and 384-dimensional vector space; retrieval filters by exact model identifier and dimension so vectors from other models are never mixed. PostgreSQL performs nearest-neighbor search with cosine distance and the matching HNSW cosine index; vectors are not loaded into application memory.
+
+top_k is request-configurable from 1 through 20 (default 5). The returned similarity is 1 - cosine_distance, so larger values mean closer vector directions for this query. It is a ranking signal, not a calibrated confidence, correctness, or resolution-quality score. Historical answers are returned as historical support evidence only.
+
+Example request:
+
+    {"query": "My mobile internet stopped working after switching to 5G", "top_k": 5}
+
+Each result includes the ticket subject/body/answer, queue/type/priority/language, tags, the similarity score, and source dataset/split/record/revision metadata. Raw vectors are never returned. The model loads once on the first retrieval request. The API needs DATABASE_URL and the optional embeddings dependency installed.
 
 ## Project map
 

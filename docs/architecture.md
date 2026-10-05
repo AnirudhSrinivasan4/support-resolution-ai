@@ -18,6 +18,12 @@ The configurable default model is `sentence-transformers/paraphrase-multilingual
 
 The historical `answer` is not part of the embedding input. The source dataset is heterogeneous public support data, not telecom-specific; vectors represent historical subject/body text, not validated solutions.
 
+## Semantic historical-ticket retrieval
+
+POST /v1/retrieval/semantic passes the trimmed query through the existing EmbeddingProvider abstraction and sends the resulting vector to SemanticTicketSearchRepository. The provider is created with the configured embedding model and optional pinned revision already used by the embedding pipeline; no separate model loader or query vector implementation is introduced. The service rejects blank queries and requires the stored corpus's 384-dimensional model.
+
+The SQLAlchemy adapter filters by exact model_identifier and embedding_dimension, computes pgvector cosine distance in PostgreSQL, and limits the ordered results there. Its vector cast matches the model/dimension-specific HNSW cosine expression index. Each result carries historical answer text, ticket metadata, tags, and existing dataset provenance; the raw vector is excluded. The API similarity is 1 - cosine_distance (higher means closer in cosine direction). It ranks candidates for a given query and is not a probability or correctness guarantee. top_k defaults to 5 and is bounded to 1–20.
+
 ## Intended resolution request flow
 
 The planned API accepts a raw complaint, obtains a structured analysis (intent/category, product, severity, and sentiment), retrieves relevant sources, reranks candidates, and asks an LLM to draft a step-by-step response grounded in those sources. A citation validator checks that citations refer to retrieved source identifiers. If evidence or confidence is insufficient, the response should abstain or recommend escalation for agent review.
@@ -48,7 +54,7 @@ This diagram describes the future resolution flow, not implemented functionality
 - `app/api` validates transport input and presents results to clients.
 - `app/core` owns runtime configuration and cross-cutting concerns.
 
-No database schema or concrete AI adapter is defined yet.
+The current database schema and concrete historical embedding/search adapters are defined in app/infrastructure/persistence; future adapters should continue to implement the domain ports.
 
 ## Data provenance and safety
 

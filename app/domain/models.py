@@ -148,3 +148,23 @@ class EmbeddingBatchResult:
             skipped_no_text=self.skipped_no_text + other.skipped_no_text,
             errors=self.errors + other.errors,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticTicketResult:
+    """Historical ticket returned by semantic search, without its raw vector."""
+
+    ticket_id: int
+    subject: str | None
+    body: str | None
+    answer: str | None
+    queue: str | None
+    ticket_type: str | None
+    priority: str | None
+    language: str | None
+    tags: tuple[str, ...]
+    similarity: float
+    source_dataset: str
+    source_split: str
+    source_record_id: str
+    source_revision: str | None

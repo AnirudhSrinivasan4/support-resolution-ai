@@ -8,6 +8,7 @@ from app.domain.models import (
     SearchHit,
     SearchQuery,
     SourceDocument,
+    SemanticTicketResult,
     TicketEmbedding,
     TicketEmbeddingCandidate,
 )
@@ -39,6 +40,19 @@ class TicketEmbeddingRepository(Protocol):
     def delete_for_tickets(self, ticket_ids: Sequence[int], model_identifier: str) -> None: ...
 
     def ensure_vector_index(self, model_identifier: str, dimension: int) -> None: ...
+
+
+class SemanticTicketSearchRepository(Protocol):
+    """Search historical tickets by vectors for one specific model."""
+
+    def search_by_embedding(
+        self,
+        *,
+        embedding: Sequence[float],
+        model_identifier: str,
+        dimension: int,
+        limit: int,
+    ) -> Sequence[SemanticTicketResult]: ...
 
 
 class LLMProvider(Protocol):
