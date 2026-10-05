@@ -168,3 +168,35 @@ class SemanticTicketResult:
     source_split: str
     source_record_id: str
     source_revision: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LexicalTicketResult:
+    """Historical ticket returned by PostgreSQL full-text search."""
+
+    ticket_id: int
+    subject: str | None
+    body: str | None
+    answer: str | None
+    queue: str | None
+    ticket_type: str | None
+    priority: str | None
+    language: str | None
+    tags: tuple[str, ...]
+    lexical_score: float
+    source_dataset: str
+    source_split: str
+    source_record_id: str
+    source_revision: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class HybridTicketResult:
+    """RRF-ranked result with original modality ranks and raw modality scores."""
+
+    ticket: SemanticTicketResult | LexicalTicketResult
+    fused_score: float
+    semantic_rank: int | None
+    semantic_score: float | None
+    lexical_rank: int | None
+    lexical_score: float | None

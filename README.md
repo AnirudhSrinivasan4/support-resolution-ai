@@ -4,7 +4,7 @@ A production-minded prototype for helping support agents understand a complaint,
 
 ## Current state
 
-The current milestones add saved Hugging Face dataset ingestion, a local historical-ticket embedding pipeline, and semantic retrieval backed by PostgreSQL/pgvector. Hybrid retrieval, reranking, LLM calls, and resolution generation are still out of scope.
+The current milestones add saved Hugging Face dataset ingestion, a local historical-ticket embedding pipeline, semantic retrieval, and hybrid semantic/full-text retrieval backed by PostgreSQL/pgvector. Reranking, LLM calls, and resolution generation are still out of scope.
 
 The historical corpus is a filtered subset of a heterogeneous public customer-support dataset (approximately 61k tickets before filtering). It is **not telecom-specific**. Telecom-specific guidance will live in a separate knowledge base. Historical answers are imperfect historical support evidence, not verified resolutions or ground truth.
 
@@ -69,11 +69,19 @@ Example request:
 
 Each result includes the ticket subject/body/answer, queue/type/priority/language, tags, the similarity score, and source dataset/split/record/revision metadata. Raw vectors are never returned. The model loads once on the first retrieval request. The API needs DATABASE_URL and the optional embeddings dependency installed.
 
+## Hybrid retrieval
+
+POST /v1/retrieval/hybrid combines semantic candidates with PostgreSQL full-text candidates over subject and body; historical answers are excluded from lexical matching. PostgreSQL full-text search and a GIN index keep lexical retrieval in the existing database without another search service. The generated search vector uses the simple text configuration to avoid assuming the corpus is English-only and safely coalesces missing subject/body fields. The query builder removes common English/German function words and ORs the remaining terms so paraphrased complaints can still produce lexical candidates; ts_rank_cd rewards matches with more term coverage.
+
+The API fuses the two ordered candidate lists with Reciprocal Rank Fusion (RRF): each result receives 1 / (RRF constant + one-based rank) from each list where it appears. It combines ranks rather than averaging semantic and lexical scores whose scales differ. A ticket in both lists receives both contributions; candidates in only one list remain eligible. fused_score is a ranking value, not confidence. Responses retain modality ranks and scores for inspection.
+
+Defaults are 20 semantic candidates, 20 lexical candidates, final top_k 5 (maximum 20), and RRF constant 60. Configure candidate sizes and RRF_CONSTANT through environment variables. Increasing candidate limits can improve recall at additional query cost.
+
 ## Project map
 
 - `app/domain`: shared domain types and provider/storage protocols.
 - `app/ingestion`: row validation, normalization, and ingestion orchestration.
-- `app/services`: future use-case orchestration outside ingestion.
+- `app/services`: semantic and hybrid retrieval orchestration.
 - `app/infrastructure/datasets`: Hugging Face saved-dataset adapter.
 - `app/infrastructure/persistence`: SQLAlchemy models, database setup, and repository.
 - `app/api`: HTTP routes and request/response boundary.

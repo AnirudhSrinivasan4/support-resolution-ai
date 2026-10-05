@@ -16,6 +16,9 @@ class Settings:
     )
     embedding_model_revision: str | None = os.getenv("EMBEDDING_MODEL_REVISION") or None
     embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
+    semantic_candidate_limit: int = int(os.getenv("SEMANTIC_CANDIDATE_LIMIT", "20"))
+    lexical_candidate_limit: int = int(os.getenv("LEXICAL_CANDIDATE_LIMIT", "20"))
+    rrf_constant: int = int(os.getenv("RRF_CONSTANT", "60"))
 
 
 settings = Settings()

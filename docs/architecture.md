@@ -24,6 +24,12 @@ POST /v1/retrieval/semantic passes the trimmed query through the existing Embedd
 
 The SQLAlchemy adapter filters by exact model_identifier and embedding_dimension, computes pgvector cosine distance in PostgreSQL, and limits the ordered results there. Its vector cast matches the model/dimension-specific HNSW cosine expression index. Each result carries historical answer text, ticket metadata, tags, and existing dataset provenance; the raw vector is excluded. The API similarity is 1 - cosine_distance (higher means closer in cosine direction). It ranks candidates for a given query and is not a probability or correctness guarantee. top_k defaults to 5 and is bounded to 1–20.
 
+## Hybrid retrieval
+
+POST /v1/retrieval/hybrid reuses the semantic retrieval service, so the configured multilingual query embedder is loaded once and semantic-only retrieval keeps the same route and response. The lexical adapter searches the generated historical_tickets.search_vector over subject and body only. Its PostgreSQL simple-config tsvector coalesces NULL text fields and is indexed with GIN. The lexical query builder removes common English/German function words and ORs the remaining terms; ts_rank_cd orders matches by term coverage. PostgreSQL full-text search was chosen because tickets and vectors already live in PostgreSQL; it avoids running and refreshing a second search service.
+
+The hybrid service requests independently configurable semantic and lexical candidate lists, then fuses their one-based rankings using Reciprocal Rank Fusion: score(d) = sum(1 / (k + rank)) for each list containing document d. This avoids directly averaging raw cosine and ts_rank_cd values, which use different scales. A document in both lists receives both contributions; a document in either list remains eligible. The fused value is a rank aggregation score, not confidence. Results retain modality ranks and raw modality scores. Defaults: 20 candidates per channel and k=60; final top_k is bounded to 20.
+
 ## Intended resolution request flow
 
 The planned API accepts a raw complaint, obtains a structured analysis (intent/category, product, severity, and sentiment), retrieves relevant sources, reranks candidates, and asks an LLM to draft a step-by-step response grounded in those sources. A citation validator checks that citations refer to retrieved source identifiers. If evidence or confidence is insufficient, the response should abstain or recommend escalation for agent review.

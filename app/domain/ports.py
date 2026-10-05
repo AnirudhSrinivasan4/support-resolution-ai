@@ -4,6 +4,7 @@ from typing import Protocol, Sequence, TypeVar
 
 from app.domain.models import (
     HistoricalTicket,
+    LexicalTicketResult,
     IngestionBatchResult,
     SearchHit,
     SearchQuery,
@@ -53,6 +54,12 @@ class SemanticTicketSearchRepository(Protocol):
         dimension: int,
         limit: int,
     ) -> Sequence[SemanticTicketResult]: ...
+
+
+class LexicalTicketSearchRepository(Protocol):
+    """Search historical ticket subject/body using PostgreSQL full-text search."""
+
+    def search_by_text(self, *, query: str, limit: int) -> Sequence[LexicalTicketResult]: ...
 
 
 class LLMProvider(Protocol):

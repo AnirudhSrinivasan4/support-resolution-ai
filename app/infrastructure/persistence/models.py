@@ -14,6 +14,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from pgvector.sqlalchemy import Vector
 
 
@@ -36,6 +37,11 @@ class HistoricalTicketRecord(Base):
         Index("ix_historical_tickets_queue", "queue"),
         Index("ix_historical_tickets_priority", "priority"),
         Index("ix_historical_tickets_language", "language"),
+        Index(
+            "ix_historical_tickets_search_vector",
+            "search_vector",
+            postgresql_using="gin",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -45,6 +51,10 @@ class HistoricalTicketRecord(Base):
     source_revision: Mapped[str | None] = mapped_column(String(128))
     subject: Mapped[str | None] = mapped_column(Text)
     body: Mapped[str | None] = mapped_column(Text)
+    # PostgreSQL uses a generated TSVECTOR; SQLite uses Text for portable fixtures.
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR().with_variant(Text(), "sqlite"), nullable=True
+    )
     answer: Mapped[str | None] = mapped_column(Text)
     ticket_type: Mapped[str | None] = mapped_column(Text)
     queue: Mapped[str | None] = mapped_column(Text)

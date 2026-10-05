@@ -7,6 +7,9 @@ services:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://support:local-development-only@db:5432/support}
+      SEMANTIC_CANDIDATE_LIMIT: ${SEMANTIC_CANDIDATE_LIMIT:-20}
+      LEXICAL_CANDIDATE_LIMIT: ${LEXICAL_CANDIDATE_LIMIT:-20}
+      RRF_CONSTANT: ${RRF_CONSTANT:-60}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
     depends_on:
