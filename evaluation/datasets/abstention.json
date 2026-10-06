@@ -1,0 +1,16 @@
+{
+  "dataset_version": "1.0",
+  "description": "Manually curated examples of expected resolution abstention; label reflects current curated KB coverage, not universal support policy.",
+  "examples": [
+    {"id":"abs-001","complaint":"E4037 appears when I try to activate my eSIM.","expected_abstained":false},
+    {"id":"abs-002","complaint":"Mobile data is enabled but I cannot open any websites.","expected_abstained":false},
+    {"id":"abs-003","complaint":"I was charged twice for the same recharge.","expected_abstained":false},
+    {"id":"abs-004","complaint":"I keep getting unexpected roaming charges from my recent trip.","expected_abstained":false},
+    {"id":"abs-005","complaint":"I suspect someone swapped my SIM and took over my number.","expected_abstained":false},
+    {"id":"abs-006","complaint":"My washing machine stopped draining; how do I repair it?","expected_abstained":true},
+    {"id":"abs-007","complaint":"My laptop screen flickers after an update.","expected_abstained":true},
+    {"id":"abs-008","complaint":"Tell me the exact current price of every roaming plan in every country.","expected_abstained":true},
+    {"id":"abs-009","complaint":"Something happened and now it is bad. What should I do?","expected_abstained":true},
+    {"id":"abs-010","complaint":"Can you diagnose a fault in my home electricity wiring?","expected_abstained":true}
+  ]
+}

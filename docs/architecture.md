@@ -32,35 +32,53 @@ The hybrid service requests independently configurable semantic and lexical cand
 
 ## Intended resolution request flow
 
-The planned API accepts a raw complaint, obtains a structured analysis (intent/category, product, severity, and sentiment), retrieves relevant sources, reranks candidates, and asks an LLM to draft a step-by-step response grounded in those sources. A citation validator checks that citations refer to retrieved source identifiers. If evidence or confidence is insufficient, the response should abstain or recommend escalation for agent review.
+POST `/v1/complaints/understand` uses the configured LLM provider to classify a complaint into controlled intent, category, product, severity, and sentiment labels. Intent/category/product lists are configurable through environment variables; each includes `unknown` so novel or unclear tickets do not require code or enum changes. Provider output is validated against the same schema before it reaches the response. A small deterministic triage layer raises severity for explicit SIM-swap/account-security and complete-outage phrases, and lowers general inquiries; this is an advisory safeguard, not carrier policy. Sentiment is descriptive and does not drive troubleshooting. The parser does not log complaint text.
+
+POST `/v1/resolutions` parses the complaint first, then retrieves bounded candidates through the existing historical hybrid RRF and KB semantic/lexical RRF services, filters for relevant KB evidence, and asks the configured LLM provider for a structured step-by-step draft. Its response includes the validated complaint understanding alongside the cited resolution. This checkout currently exposes a `Reranker` protocol but contains no concrete cross-encoder adapter, so resolution generation preserves the existing RRF ordering rather than silently substituting another reranker.
 
 ```mermaid
 flowchart LR
     Agent[Support agent] --> API[FastAPI]
-    API --> Service[Application services]
-    Service --> Parser[Complaint analysis]
-    Service --> Embed[Embedding provider]
-    Service --> Search[Hybrid search]
-    Search --> Rank[Cross-encoder reranker]
-    Rank --> Draft[Grounded draft generation]
-    Draft --> Validate[Citation and abstention checks]
+    API --> Service[Resolution service]
+    Service --> Understand[Structured complaint understanding]
+    Understand --> HSearch[Historical hybrid RRF]
+    Service --> KSearch[Telecom KB semantic + lexical RRF]
+    HSearch --> Evidence[Bounded evidence + relevance gate]
+    KSearch --> Evidence
+    Evidence -->|sufficient KB evidence| LLM[Configured LLM provider]
+    Evidence -->|insufficient| Abstain[Deterministic abstention]
+    LLM --> Validate[Citation validation]
     Validate --> API
-    Sources[Historical tickets and telecom KB] --> Ingest[Future ingestion workflow]
-    Ingest --> Store[(PostgreSQL + pgvector)]
-    Search --> Store
+    Abstain --> API
+    HSearch --> Store[(PostgreSQL + pgvector)]
+    KSearch --> Store
 ```
 
-This diagram describes the future resolution flow, not implemented functionality. The initial deployment can remain a single API service with clear Python module boundaries. A separate ingestion worker can be introduced when data refresh needs it.
+The standalone complaint route and resolution flow share the same service, taxonomy, and LLM provider abstraction. Both validate labels against the configured controlled vocabulary; classification is an operational aid and must be evaluated against reviewed complaint labels before being treated as reliable.
+
+This flow is implemented by the current resolution endpoint. There is no concrete cross-encoder adapter in this checkout; candidate ordering is the existing RRF ordering. A separate ingestion worker can be introduced if KB data refresh needs it.
+
+The RAG endpoint is the first implemented version of that flow. Retrieval precedes generation so the model receives a bounded evidence set rather than answering freely from general knowledge. The service sends KB articles and historical tickets in separately labeled sections. Telecom KB guidance is authoritative for troubleshooting/policy; historical tickets are contextual examples and their agent answers are not verified resolution truth. Prompting expresses that precedence, while citation IDs are independently checked against retrieved candidates and mapped to titles/types by the application. A deterministic relevance gate abstains and recommends escalation when there is no sufficiently relevant KB evidence. This is safer than asking the model to decide whether evidence is adequate or to invent a confidence score.
+
+`LLMProvider` accepts system/user prompts and a JSON schema, and returns a JSON-shaped mapping. `OpenAICompatibleLLMProvider` is the current configurable infrastructure adapter and uses the standard Chat Completions-compatible HTTP shape without a vendor SDK. `LLM_PROVIDER=disabled` prevents accidental provider calls when setup is missing. The route at `app/api/routes/resolutions.py` validates the HTTP request and maps the service result; evidence filtering, prompts, provider invocation, abstention, and citation validation are in `app/services/resolution.py`.
 
 ## Module boundaries
 
 - `app/domain` defines provider-independent records and protocols.
-- `app/services` will coordinate use cases through those protocols; HTTP handlers should not call model or database vendors directly.
-- `app/infrastructure` will contain concrete embedding, LLM, search, reranking, and persistence adapters.
+- `app/services` coordinate use cases through those protocols; HTTP handlers should not call model or database vendors directly.
+- `app/infrastructure` contains concrete embedding, LLM, search, and persistence adapters.
 - `app/api` validates transport input and presents results to clients.
 - `app/core` owns runtime configuration and cross-cutting concerns.
 
 The current database schema and concrete historical embedding/search adapters are defined in app/infrastructure/persistence; future adapters should continue to implement the domain ports.
+
+## Separate telecom knowledge base
+
+`knowledge_base/seeds/v1/documents.json` is a versioned, committed, synthetic-curated demonstration seed, not copied carrier procedure. The distinct `knowledge_documents` table stores stable IDs, title/procedure, category, product, severity, escalation conditions, source/version, content hash, timestamps, and a generated simple-config PostgreSQL tsvector with a GIN index. `knowledge_document_embeddings` stores model-specific vectors keyed by document and model, and does not share rows or indexes with `historical_ticket_embeddings`.
+
+The KB ingestion CLI (`python -m app.knowledge.cli`) upserts source documents by stable ID and hashes all fields. An unchanged hash preserves the record and vector; a changed hash updates the document and regenerates only its KB vector. The existing embedding provider/model configuration is reused. The KB search service queries its own lexical and vector repositories then applies RRF; the API route remains a thin transport adapter at POST `/v1/knowledge/search`.
+
+Lexical retrieval is valuable for exact technical tokens such as E4037, identifiers that may not be represented robustly by embedding similarity. Semantic retrieval finds relevant procedures when a customer paraphrases an issue, for example “my digital SIM won't activate” without naming eSIM or an error code. PostgreSQL is reused because it already holds ticket data and pgvector indexes; using its full-text and vector capabilities avoids another database service for this prototype. The future RAG service can retrieve both KB articles and historical cases while retaining their separate source types and reliability: telecom guidance is authoritative curated evidence, whereas the heterogeneous ticket corpus is only historical support evidence. It must cite source IDs, validate citations, and abstain/escalate if evidence is inadequate.
 
 ## Data provenance and safety
 

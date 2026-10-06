@@ -1,9 +1,17 @@
 """Protocols that isolate the domain from provider and storage choices."""
 
-from typing import Protocol, Sequence, TypeVar
+from typing import Any, Protocol, Sequence
+from collections.abc import Mapping
 
 from app.domain.models import (
     HistoricalTicket,
+    ComplaintAnalysis,
+    KnowledgeDocumentEmbedding,
+    KnowledgeEmbeddingCandidate,
+    KnowledgeIngestionResult,
+    KnowledgeLexicalHit,
+    KnowledgeSemanticHit,
+    TelecomKnowledgeDocument,
     LexicalTicketResult,
     IngestionBatchResult,
     SearchHit,
@@ -13,9 +21,6 @@ from app.domain.models import (
     TicketEmbedding,
     TicketEmbeddingCandidate,
 )
-
-T = TypeVar("T")
-
 
 class EmbeddingProvider(Protocol):
     """Convert text into vectors using a replaceable embedding model."""
@@ -63,11 +68,21 @@ class LexicalTicketSearchRepository(Protocol):
 
 
 class LLMProvider(Protocol):
-    """Produce a typed result through a replaceable language model."""
+    """Return provider-independent JSON-shaped output for a supplied schema."""
 
     def generate_structured(
-        self, *, system_prompt: str, user_prompt: str, response_type: type[T]
-    ) -> T: ...
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        schema: Mapping[str, Any],
+    ) -> Mapping[str, Any]: ...
+
+
+class ComplaintAnalyzer(Protocol):
+    """Parse complaint text into the validated support taxonomy."""
+
+    def understand(self, complaint: str) -> ComplaintAnalysis: ...
 
 
 class SearchProvider(Protocol):
@@ -98,3 +113,34 @@ class HistoricalTicketRepository(Protocol):
     def upsert_many(
         self, tickets: Sequence[HistoricalTicket]
     ) -> IngestionBatchResult: ...
+
+
+class TelecomKnowledgeRepository(Protocol):
+    """Persist curated telecom knowledge documents idempotently."""
+
+    def upsert_many(
+        self, documents: Sequence[TelecomKnowledgeDocument]
+    ) -> KnowledgeIngestionResult: ...
+
+    def search_by_text(self, *, query: str, limit: int) -> Sequence[KnowledgeLexicalHit]: ...
+
+
+class KnowledgeEmbeddingRepository(Protocol):
+    """Persist and retrieve vectors belonging only to telecom KB documents."""
+
+    def load_batch(
+        self, *, after_document_id: str, limit: int, model_identifier: str
+    ) -> Sequence[KnowledgeEmbeddingCandidate]: ...
+
+    def upsert_many(self, embeddings: Sequence[KnowledgeDocumentEmbedding]) -> None: ...
+
+    def search_by_embedding(
+        self,
+        *,
+        embedding: Sequence[float],
+        model_identifier: str,
+        dimension: int,
+        limit: int,
+    ) -> Sequence[KnowledgeSemanticHit]: ...
+
+    def ensure_vector_index(self, model_identifier: str, dimension: int) -> None: ...

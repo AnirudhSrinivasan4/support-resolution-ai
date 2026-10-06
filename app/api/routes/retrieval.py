@@ -7,15 +7,12 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.services.semantic_retrieval import (
-    EXPECTED_EMBEDDING_DIMENSION,
     MAX_TOP_K,
     InvalidSemanticQuery,
     SemanticRetrievalService,
 )
 from app.services.hybrid_retrieval import HybridRetrievalService
-from app.infrastructure.embeddings.sentence_transformer import (
-    SentenceTransformerEmbeddingProvider,
-)
+from app.infrastructure.embeddings.runtime import get_embedding_provider
 from app.infrastructure.persistence.database import (
     create_database_engine,
     create_session_factory,
@@ -94,13 +91,7 @@ def _get_service() -> SemanticRetrievalService:
     """Load the configured local model and create its database adapter once."""
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL must be set to use semantic retrieval")
-    provider = SentenceTransformerEmbeddingProvider(
-        settings.embedding_model,
-        revision=settings.embedding_model_revision,
-        batch_size=settings.embedding_batch_size,
-    )
-    if provider.dimension != EXPECTED_EMBEDDING_DIMENSION:
-        raise RuntimeError("configured retrieval model must output 384 dimensions")
+    provider = get_embedding_provider()
     engine = create_database_engine(settings.database_url)
     return SemanticRetrievalService(
         provider,

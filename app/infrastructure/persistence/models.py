@@ -118,3 +118,73 @@ class HistoricalTicketEmbeddingRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class KnowledgeDocumentRecord(Base):
+    """A versioned authoritative telecom troubleshooting article."""
+
+    __tablename__ = "knowledge_documents"
+    __table_args__ = (
+        Index(
+            "ix_knowledge_documents_search_vector",
+            "search_vector",
+            postgresql_using="gin",
+        ),
+        Index("ix_knowledge_documents_category", "category"),
+        Index("ix_knowledge_documents_product", "product"),
+    )
+
+    document_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(128), nullable=False)
+    product: Mapped[str] = mapped_column(String(128), nullable=False)
+    severity: Mapped[str] = mapped_column(String(64), nullable=False)
+    escalation_conditions: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[str] = mapped_column(String(128), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR().with_variant(Text(), "sqlite"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class KnowledgeDocumentEmbeddingRecord(Base):
+    """Model-specific vector in the isolated telecom KB embedding collection."""
+
+    __tablename__ = "knowledge_document_embeddings"
+    __table_args__ = (
+        CheckConstraint(
+            "embedding_dimension > 0", name="ck_knowledge_embedding_dimension"
+        ),
+        UniqueConstraint(
+            "document_id",
+            "model_identifier",
+            name="uq_knowledge_embedding_model",
+        ),
+        Index("ix_knowledge_embeddings_model", "model_identifier"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_documents.document_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    model_identifier: Mapped[str] = mapped_column(String(512), nullable=False)
+    embedding_dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector().with_variant(Text(), "sqlite"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

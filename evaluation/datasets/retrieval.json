@@ -1,0 +1,24 @@
+{
+  "dataset_version": "1.0",
+  "description": "Manually curated query-to-telecom-KB relevance labels; synthetic baseline set.",
+  "examples": [
+    {"id":"ret-001","query":"E4037 eSIM activation failed","relevant_knowledge_source_ids":["telecom-v1.esim.error-e4037"]},
+    {"id":"ret-002","query":"My digital SIM will not finish setting up","relevant_knowledge_source_ids":["telecom-v1.esim.activation","telecom-v1.esim.download-fails"]},
+    {"id":"ret-003","query":"The QR activation code says it was already used","relevant_knowledge_source_ids":["telecom-v1.esim.activation","telecom-v1.esim.error-e4037"]},
+    {"id":"ret-004","query":"No mobile signal anywhere and calls fail","relevant_knowledge_source_ids":["telecom-v1.network.no-service","telecom-v1.network.outage"]},
+    {"id":"ret-005","query":"Internet on my phone is slow even with data enabled","relevant_knowledge_source_ids":["telecom-v1.mobile-data.slow","telecom-v1.mobile-data.no-internet"]},
+    {"id":"ret-006","query":"5G connection keeps dropping","relevant_knowledge_source_ids":["telecom-v1.5g.drops","telecom-v1.5g.not-available"]},
+    {"id":"ret-007","query":"Payment was deducted but my prepaid balance did not update","relevant_knowledge_source_ids":["telecom-v1.payment.deducted-no-recharge","telecom-v1.recharge.balance-not-updated"]},
+    {"id":"ret-008","query":"I see two charges for a single payment","relevant_knowledge_source_ids":["telecom-v1.payment.duplicate"]},
+    {"id":"ret-009","query":"My monthly invoice total is unexpectedly high","relevant_knowledge_source_ids":["telecom-v1.billing.discrepancy"]},
+    {"id":"ret-010","query":"Roaming charges appeared even though I did not travel","relevant_knowledge_source_ids":["telecom-v1.roaming.unexpected-charges","telecom-v1.roaming.bill-delay"]},
+    {"id":"ret-011","query":"How do I enable roaming while abroad safely?","relevant_knowledge_source_ids":["telecom-v1.roaming.enable","telecom-v1.roaming.no-service"]},
+    {"id":"ret-012","query":"I am locked out of the customer portal","relevant_knowledge_source_ids":["telecom-v1.account.locked","telecom-v1.account.password-reset"]},
+    {"id":"ret-013","query":"Someone transferred my number to another SIM without my consent","relevant_knowledge_source_ids":["telecom-v1.security.sim-swap-suspected","telecom-v1.security.account-compromise"]},
+    {"id":"ret-014","query":"I clicked a suspicious text claiming to be from my mobile provider","relevant_knowledge_source_ids":["telecom-v1.security.phishing","telecom-v1.security.account-compromise"]},
+    {"id":"ret-015","query":"Is my handset compatible with this network band?","relevant_knowledge_source_ids":["telecom-v1.device.compatibility","telecom-v1.device.carrier-lock"]},
+    {"id":"ret-016","query":"Does this phone support a digital SIM profile?","relevant_knowledge_source_ids":["telecom-v1.device.esim-compatibility","telecom-v1.esim.activation"]},
+    {"id":"ret-017","query":"My new SIM registration is still pending","relevant_knowledge_source_ids":["telecom-v1.sim.registration-pending","telecom-v1.sim.registration-failed"]},
+    {"id":"ret-018","query":"Our area seems to have a widespread mobile outage","relevant_knowledge_source_ids":["telecom-v1.network.outage","telecom-v1.escalation.outage-impact"]}
+  ]
+}

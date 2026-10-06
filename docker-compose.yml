@@ -1,6 +1,8 @@
 services:
   api:
     build: .
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
@@ -10,8 +12,20 @@ services:
       SEMANTIC_CANDIDATE_LIMIT: ${SEMANTIC_CANDIDATE_LIMIT:-20}
       LEXICAL_CANDIDATE_LIMIT: ${LEXICAL_CANDIDATE_LIMIT:-20}
       RRF_CONSTANT: ${RRF_CONSTANT:-60}
-      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      COMPLAINT_INTENTS: ${COMPLAINT_INTENTS:-connectivity_issue,esim_activation,payment_failed,duplicate_charge,billing_dispute,roaming_issue,account_access,security_concern,device_issue,general_inquiry,unknown}
+      COMPLAINT_CATEGORIES: ${COMPLAINT_CATEGORIES:-network,esim,sim,billing,payments,roaming,account,device,outage,general_inquiry,unknown}
+      COMPLAINT_PRODUCTS: ${COMPLAINT_PRODUCTS:-broadband,mobile_data,fifth_generation_mobile,esim,sim,voice,payments,roaming,account,device,unknown}
+      KNOWLEDGE_SEMANTIC_CANDIDATE_LIMIT: ${KNOWLEDGE_SEMANTIC_CANDIDATE_LIMIT:-20}
+      KNOWLEDGE_LEXICAL_CANDIDATE_LIMIT: ${KNOWLEDGE_LEXICAL_CANDIDATE_LIMIT:-20}
+      LLM_PROVIDER: ${LLM_PROVIDER:-disabled}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
+      RESOLUTION_KNOWLEDGE_EVIDENCE_LIMIT: ${RESOLUTION_KNOWLEDGE_EVIDENCE_LIMIT:-5}
+      RESOLUTION_HISTORICAL_EVIDENCE_LIMIT: ${RESOLUTION_HISTORICAL_EVIDENCE_LIMIT:-4}
+      RESOLUTION_MIN_KNOWLEDGE_SIMILARITY: ${RESOLUTION_MIN_KNOWLEDGE_SIMILARITY:-0.40}
+      RESOLUTION_MIN_KNOWLEDGE_LEXICAL_SCORE: ${RESOLUTION_MIN_KNOWLEDGE_LEXICAL_SCORE:-0.50}
     depends_on:
       db:
         condition: service_healthy

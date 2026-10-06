@@ -4,7 +4,7 @@ A production-minded prototype for helping support agents understand a complaint,
 
 ## Current state
 
-The current milestones add saved Hugging Face dataset ingestion, a local historical-ticket embedding pipeline, semantic retrieval, and hybrid semantic/full-text retrieval backed by PostgreSQL/pgvector. Reranking, LLM calls, and resolution generation are still out of scope.
+The current milestones add saved Hugging Face dataset ingestion, separate telecom knowledge ingestion, model-specific embeddings, semantic and hybrid retrieval, and grounded RAG resolution generation backed by PostgreSQL/pgvector. The LLM provider is configurable and disabled unless explicitly enabled.
 
 The historical corpus is a filtered subset of a heterogeneous public customer-support dataset (approximately 61k tickets before filtering). It is **not telecom-specific**. Telecom-specific guidance will live in a separate knowledge base. Historical answers are imperfect historical support evidence, not verified resolutions or ground truth.
 
@@ -76,6 +76,47 @@ POST /v1/retrieval/hybrid combines semantic candidates with PostgreSQL full-text
 The API fuses the two ordered candidate lists with Reciprocal Rank Fusion (RRF): each result receives 1 / (RRF constant + one-based rank) from each list where it appears. It combines ranks rather than averaging semantic and lexical scores whose scales differ. A ticket in both lists receives both contributions; candidates in only one list remain eligible. fused_score is a ranking value, not confidence. Responses retain modality ranks and scores for inspection.
 
 Defaults are 20 semantic candidates, 20 lexical candidates, final top_k 5 (maximum 20), and RRF constant 60. Configure candidate sizes and RRF_CONSTANT through environment variables. Increasing candidate limits can improve recall at additional query cost.
+
+## Telecom knowledge base
+
+The telecom KB is an independent, versioned source of synthetic curated domain guidance. The committed seed at `knowledge_base/seeds/v1/documents.json` contains 45 demonstration procedures labeled `synthetic-curated`; they are not proprietary carrier procedures. It is stored in `knowledge_documents` with its own `knowledge_document_embeddings` table. This keeps authoritative domain guidance distinct from heterogeneous historical customer-support cases and their imperfect agent answers.
+
+Apply the current migrations, install the optional embedding dependency, and ingest the small committed seed:
+
+```powershell
+pip install -e "[embeddings,dev]"
+$env:DATABASE_URL = "postgresql+psycopg://support:local-development-only@localhost:5432/support"
+alembic upgrade head
+python -m app.knowledge.cli
+```
+
+The seed may also be supplied as a positional JSON path; `--batch-size` controls embedding batches. Ingestion is idempotent and re-embeds a document only when its content or metadata hash changes. It does not read or update historical ticket embeddings.
+
+POST `/v1/knowledge/search` accepts `{"query":"E4037 eSIM activation failed","top_k":5}`. It returns document content and provenance/version plus semantic and lexical ranks/scores and their RRF score; vectors are never exposed. Exact technical identifiers such as `E4037` benefit from PostgreSQL lexical matching, while semantic embeddings can find eSIM guidance for paraphrases such as “my digital SIM won't activate” that omit the code. Both use PostgreSQL/pgvector already operated by the service, avoiding an additional search database and keeping the demo's stores and operations simple.
+
+The resolution service combines the authoritative telecom KB and historical ticket corpus as distinct source types, preserves their provenance, validates citations against retrieved evidence, and abstains/escalates when relevant KB evidence is insufficient.
+
+## Grounded resolution generation
+
+POST `/v1/resolutions` accepts a complaint and returns a resolution, ordered steps, escalation advice, validated citations, and an `abstained` flag. RAG means retrieval-augmented generation here: retrieval runs first, then only a bounded set of retrieved evidence is given to the LLM. The service uses existing hybrid RRF order for both corpora. It places telecom KB procedures under `AUTHORITATIVE KNOWLEDGE BASE EVIDENCE` and historical cases under `HISTORICAL SUPPORT CASE EVIDENCE`; historical agent answers are explicitly unverified context and cannot override KB procedures.
+
+The prompt restricts factual/procedural claims to supplied evidence and requires stable source IDs for citations. The application checks those IDs against its actual retrieval set, derives citation type/title from that set, and rejects unknown IDs. This validation is necessary because an LLM can emit plausible but nonexistent citations. Before generation, the service deterministically abstains unless a KB hit clears the configured semantic similarity or lexical-score threshold. This prevents historical cases or a nearest-neighbor result with weak relevance from becoming unsupported instructions. No numeric confidence is requested or returned.
+
+The LLM adapter is a small OpenAI Chat Completions-compatible HTTP client behind `LLMProvider`; it does not tie the service to an SDK or vendor. To enable it, set `LLM_PROVIDER=openai-compatible`, `LLM_MODEL` to a model name supported by the endpoint, optionally set `LLM_BASE_URL`, and provide `LLM_API_KEY` through the local environment or secret manager. For a local OpenAI-compatible service the key may be omitted. `LLM_PROVIDER=disabled` is the default; the resolution endpoint returns 503 until configured. Evidence limits default to 5 KB documents and 4 historical tickets (maximum 5 each). KB relevance floors default to semantic similarity 0.40 or lexical score 0.50 and should be tuned with recorded evaluation results.
+
+## Structured complaint understanding
+
+POST `/v1/complaints/understand` returns controlled `intent`, `category`, `product`, `severity`, and `sentiment` labels. Configure the evolving intent/category/product lists with `COMPLAINT_INTENTS`, `COMPLAINT_CATEGORIES`, and `COMPLAINT_PRODUCTS` (comma-separated normalized labels); each list must include `unknown`. The parser validates the provider's structured response and falls back to `unknown` only when the model reports it, rather than accepting an invented class. Deterministic severity overrides mark explicit SIM-swap/security compromise and complete outage reports high, and general inquiries low. These simple rules do not replace policy-based triage, and sentiment is informational only. `POST /v1/resolutions` runs the same parser before retrieval and includes the structured fields in its response. Classification quality remains unevaluated until a reviewed, versioned label set is scored.
+
+## Evaluation baseline
+
+Three small manually curated datasets cover complaint understanding, telecom KB retrieval, and abstention. After configuring the same database, embedding model, and LLM provider as the API, run:
+
+```powershell
+python -m app.evaluation.cli
+```
+
+The command uses existing application services and writes JSON and Markdown baseline reports under `evaluation/reports/` after successful completion. Select one suite with `--suite complaint_understanding`, `--suite retrieval`, or `--suite abstention`. Metrics and label limitations are documented in [the evaluation guide](evaluation/README.md). These small datasets are not production-quality benchmark evidence; no answer correctness or hallucination metric is reported.
 
 ## Project map
 
