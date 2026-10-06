@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { ApiError, checkApiHealth, createResolution } from "../api/resolutions";
 import { ComplaintInput } from "../components/ComplaintInput";
-import { AbstentionCard, EscalationCard, EvidenceCard, ResolutionCard, UnderstandingCard } from "../components/ResolutionPanels";
+import { EvidenceSection } from "../components/EvidenceSection";
+import { Header } from "../components/Header";
+import { AbstentionCard, EscalationCard, ResolutionCard, UnderstandingCard } from "../components/ResolutionPanels";
 import { EmptyState, ErrorState, LoadingState } from "../components/StatusStates";
+import { WorkflowBar } from "../components/WorkflowBar";
 import type { ResolutionResponse } from "../types/resolution";
 
 type ApiStatus = "checking" | "available" | "unavailable";
@@ -45,57 +48,101 @@ export function ResolutionPage() {
 
   const resultVisible = response !== null;
 
+  const currentWorkflowStage = loading
+    ? "loading"
+    : response?.abstained
+    ? "abstained"
+    : response
+    ? "resolved"
+    : error
+    ? "error"
+    : "input";
+
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="header-inner">
-          <a className="brand" href="#main" aria-label="AI Support Resolution Assistant home">
-            <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M6 8.5A3.5 3.5 0 0 1 9.5 5h13A3.5 3.5 0 0 1 26 8.5v9a3.5 3.5 0 0 1-3.5 3.5H16l-6 5v-5h-.5A3.5 3.5 0 0 1 6 17.5v-9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M11 11h10M11 15h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span>
-            <span className="brand-copy"><strong>Support Desk</strong><span>Resolution workspace</span></span>
-          </a>
-          <div className={`api-status api-status-${apiStatus}`} role="status" aria-live="polite">
-            <span className="status-dot" aria-hidden="true" />
-            <span>{apiStatus === "checking" ? "Checking API" : apiStatus === "available" ? "API available" : "API unavailable"}</span>
-          </div>
-        </div>
-      </header>
+      <Header apiStatus={apiStatus} />
 
       <main id="main" className="main-content">
         <div className="page-heading">
-          <div>
-            <p className="eyebrow">Customer operations</p>
+          <div className="page-title-group">
+            <div className="eyebrow-wrapper">
+              <span className="eyebrow-pill">CUSTOMER OPERATIONS DESK</span>
+              <span className="environment-pill">PROD-US-EAST</span>
+            </div>
             <h1>AI Support Resolution Assistant</h1>
-            <p>AI-assisted customer support resolution with grounded evidence.</p>
+            <p className="page-subtitle">
+              Intelligent triage, grounded resolution drafting, and evidence verification for enterprise support agents.
+            </p>
           </div>
-          <div className="workspace-label"><span aria-hidden="true">▦</span> Agent workspace</div>
+
+          <div className="workspace-badge">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="badge-icon" aria-hidden="true">
+              <path fillRule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
+              <path d="M2 13.692V16a2 2 0 002 2h12a2 2 0 002-2v-2.308A24.974 24.974 0 0110 15c-2.796 0-5.487-.46-8-1.308z" />
+            </svg>
+            <span>Tier-2 Agent Console</span>
+          </div>
         </div>
+
+        <WorkflowBar currentStage={currentWorkflowStage} />
 
         <div className="workspace-grid">
           <div className="primary-column">
-            <ComplaintInput complaint={complaint} loading={loading} onComplaintChange={setComplaint} onSubmit={() => void submitComplaint()} />
+            <ComplaintInput
+              complaint={complaint}
+              loading={loading}
+              onComplaintChange={setComplaint}
+              onSubmit={() => void submitComplaint()}
+            />
+
             {error && <ErrorState message={error} onDismiss={() => setError(null)} />}
+
             {loading && <LoadingState />}
+
             {!loading && !resultVisible && !error && <EmptyState />}
+
             {!loading && response && (
-              <>
+              <div className="results-container">
                 {response.abstained ? (
                   <AbstentionCard escalation={response.escalation} />
                 ) : (
                   <ResolutionCard resolution={response.resolution} steps={response.steps} />
                 )}
+
                 {!response.abstained && <EscalationCard guidance={response.escalation} />}
-                <EvidenceCard citations={response.citations} />
-              </>
+
+                <EvidenceSection citations={response.citations} />
+              </div>
             )}
           </div>
+
           {response && (
-            <aside className="secondary-column" aria-label="Complaint triage">
+            <aside className="secondary-column" aria-label="Complaint triage summary">
               <UnderstandingCard data={response.complaint_understanding} />
-              <div className="agent-note"><span aria-hidden="true">ⓘ</span><p>Review the suggested guidance and sources before responding to the customer.</p></div>
+              <div className="agent-policy-note">
+                <div className="note-header">
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="note-icon" aria-hidden="true">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <strong>Agent Policy Standard</strong>
+                </div>
+                <p>
+                  Always verify cited Knowledge Base articles before communicating resolutions directly to customers. AI outputs are advisory.
+                </p>
+              </div>
             </aside>
           )}
         </div>
-        <footer className="page-footer"><span>AI-generated guidance requires agent review.</span><span>Support Resolution Assistant</span></footer>
+
+        <footer className="page-footer">
+          <div className="footer-left">
+            <span className="footer-dot" />
+            <span>Support Operations Platform v2.4 · Grounded LLM Pipeline</span>
+          </div>
+          <div className="footer-right">
+            <span>Confidential · Internal Agent Use Only</span>
+          </div>
+        </footer>
       </main>
     </div>
   );
