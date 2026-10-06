@@ -1,51 +1,270 @@
 # Intelligent Support Ticket Resolution Assistant
 
-A production-minded prototype for helping support agents understand a complaint, find relevant support evidence, and review a grounded resolution draft. The system is intended to abstain or escalate when its evidence is insufficient.
+A production-minded prototype for helping customer support agents analyze incoming complaints, retrieve relevant domain evidence, and review grounded resolution drafts. The system is designed to deterministically abstain or recommend escalation when authoritative knowledge evidence is missing or insufficient.
 
-## Current state
+> [!NOTE]
+> This project is a production-minded prototype and demonstration system, not a production-ready application.
 
-The current milestones add saved Hugging Face dataset ingestion, separate telecom knowledge ingestion, model-specific embeddings, semantic and hybrid retrieval, and grounded RAG resolution generation backed by PostgreSQL/pgvector. The LLM provider is configurable and disabled unless explicitly enabled.
+---
 
-The historical corpus is a filtered subset of a heterogeneous public customer-support dataset (approximately 61k tickets before filtering). It is **not telecom-specific**. Telecom-specific guidance will live in a separate knowledge base. Historical answers are imperfect historical support evidence, not verified resolutions or ground truth.
+## Quick Start (Windows Demo)
 
-## Local development
+Run the primary automated demo startup script from the repository root:
 
-1. Copy `.env.example` to `.env` and add credentials only to the local `.env` file when a provider is selected.
-2. Start PostgreSQL with `docker compose up -d db`.
-3. For local Python development, install the project with `pip install -e ".[dev]"`.
-4. Set `DATABASE_URL` for a process running on the host, then apply migrations with `alembic upgrade head`.
-5. Run the API with `uvicorn app.main:app --reload`, then open `http://localhost:8000/docs` or check `http://localhost:8000/healthz`.
-
-Example PowerShell setup for the local Compose database:
-
-```powershell
-$env:DATABASE_URL = "postgresql+psycopg://support:local-development-only@localhost:5432/support"
-alembic upgrade head
+```cmd
+.\start-app.bat
 ```
 
-## Historical ticket ingestion
+### Prerequisites
+- **Docker Desktop**: Must be installed and running. Provides containerized PostgreSQL (with `pgvector`) and the FastAPI backend service.
+- **Node.js & npm**: Required to build and run the React/Vite agent frontend UI.
+- **Ollama**: Must be running locally on the host machine (`http://localhost:11434`) with the `qwen2.5:3b` model installed.
+- **Git**: For source code management.
 
-The loader expects a Hugging Face `DatasetDict` saved with `datasets.save_to_disk()`. It loads the `train` split with `datasets.load_from_disk()`. It does not download the dataset or convert it to CSV.
+To pull the required Ollama model prior to running the demo:
+```cmd
+ollama pull qwen2.5:3b
+```
 
-After PostgreSQL is running and the migration has been applied, run the full import explicitly:
+### What `start-app.bat` does
+1. **Checks Docker**: Verifies Docker daemon and Docker Compose availability.
+2. **Checks Ollama**: Queries Ollama API on port 11434 to confirm it is reachable.
+3. **Verifies Model**: Ensures `qwen2.5:3b` is present in local Ollama storage.
+4. **Starts Backend Services**: Executes `docker compose up -d` to launch PostgreSQL 16 (`pgvector`) and the FastAPI application container.
+5. **Waits for FastAPI Health**: Polls `http://localhost:8000/healthz` until the backend API reports status `ok`.
+6. **Starts React/Vite Frontend**: Opens a new command window and runs `npm run dev` inside `frontend/`.
+7. **Launches UI**: Automatically opens your default browser to `http://localhost:5173/`.
 
+### Useful URLs
+- **Agent UI Workspace**: [http://localhost:5173](http://localhost:5173)
+- **Interactive API Documentation (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **API Health Endpoint**: [http://localhost:8000/healthz](http://localhost:8000/healthz)
+
+---
+
+## Ollama Host & Docker Networking
+
+The demo environment combines containerized infrastructure with local host LLM execution:
+
+- **Host Machine**: Runs Ollama daemon serving `qwen2.5:3b` at `http://localhost:11434`.
+- **Docker Containers**: Runs PostgreSQL (`db`) and FastAPI (`api`).
+
+### `host.docker.internal` Bridge
+Inside the Dockerized FastAPI container, external network calls to Ollama route to `http://host.docker.internal:11434/v1`. `host.docker.internal` is Docker's special DNS name that resolves container traffic to the host operating system's loopback interface.
+
+### Benefits of Local Ollama Setup
+- **Offline & Local Execution**: Enables complete demo execution without cloud dependencies or paid API keys.
+- **Data Locality & Privacy**: Complaint text and support evidence remain strictly local.
+- **Zero API Costs & Limits**: Eliminates rate limits and per-token charges during development and review.
+- **Reproducible Demo**: Pinned `qwen2.5:3b` model behavior ensures deterministic local demonstration.
+
+---
+
+## End-to-End System Architecture
+
+```
+                                +-----------------------------------+
+                                |    React + Vite Agent UI (5173)   |
+                                +-----------------+-----------------+
+                                                  |
+                                                  v
+                                +-----------------+-----------------+
+                                |     FastAPI POST /v1/resolutions  |
+                                +-----------------+-----------------+
+                                                  |
+                                                  v
+                                +-----------------+-----------------+
+                                |  Stage 1: Complaint Understanding |
+                                |  (intent, category, product,      |
+                                |   severity, sentiment)            |
+                                +-----------------+-----------------+
+                                                  |
+                                                  v
+                                +-----------------+-----------------+
+                                |   Stage 2: Hybrid RRF Retrieval   |
+                                |   (Semantic Vector + Full-Text)   |
+                                +--------+----------------+---------+
+                                         |                |
+                     +-------------------+                +-------------------+
+                     |                                                        |
+                     v                                                        v
+   +---------------------------------+                      +-----------------------------------+
+   | 45-Doc Telecom KB (Authoritative)|                      | 61,765 Historical Tickets         |
+   | Synthetic procedural guidance   |                      | Heterogeneous support context     |
+   +-----------------+---------------+                      +-----------------+-----------------+
+                     |                                                        |
+                     +-------------------+                +-------------------+
+                                         |                |
+                                         v                v
+                                +--------+----------------+---------+
+                                | Stage 3: Bounded Grounded RAG     |
+                                +-----------------+-----------------+
+                                                  |
+                                                  v
+                                +-----------------+-----------------+
+                                | Stage 4: Ollama LLM (qwen2.5:3b)  |
+                                | via OpenAI-compatible adapter     |
+                                +-----------------+-----------------+
+                                                  |
+                                                  v
+                                +-----------------+-----------------+
+                                | Stage 5: Citation & Abstention    |
+                                | Validation Guardrails             |
+                                +-----------------+-----------------+
+                                                  |
+                                                  v
+                                +-----------------+-----------------+
+                                | Stage 6: React UI Workspace       |
+                                | (Resolution Steps OR Abstention)  |
+                                +-----------------------------------+
+```
+
+---
+
+## Request Pipeline & Stage Breakdown
+
+When an agent enters a complaint in the frontend UI or issues a `POST /v1/resolutions` request, the backend processes the request through six distinct pipeline stages:
+
+### Stage 1: Complaint Understanding
+Before performing evidence retrieval, `POST /v1/resolutions` invokes the complaint understanding parser (`app/services/complaint_understanding.py`). This stage extracts five structured taxonomy fields:
+- `intent`: Specific customer objective (e.g., `esim_activation`, `connectivity_issue`, `billing_dispute`).
+- `category`: Broad operational category (e.g., `esim`, `network`, `billing`).
+- `product`: Targeted service/device product (e.g., `esim`, `broadband`, `mobile_data`).
+- `severity`: Operational severity level (`low`, `medium`, `high`, `critical`, `unknown`). Deterministic overrides automatically mark complete outage reports and explicit security compromises as `high`.
+- `sentiment`: Informational customer emotional state (`positive`, `neutral`, `frustrated`, `angry`, `negative`, `unknown`).
+
+### Stage 2: Hybrid Retrieval & Fusion (RRF)
+The service queries two database search channels in parallel:
+1. **Semantic Vector Search**: Generates a 384-dimensional dense vector using `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and queries PostgreSQL `pgvector` with HNSW cosine distance.
+2. **Lexical Full-Text Search**: Builds a PostgreSQL full-text search vector over subject and body text using a GIN index, rewarding matching terms with `ts_rank_cd`.
+
+The candidate rank lists are merged using **Reciprocal Rank Fusion (RRF)**:
+$$\text{RRF Score} = \sum_{m \in \{\text{semantic}, \text{lexical}\}} \frac{1}{k + r_m}$$
+where $k=60$ by default and $r_m$ is the candidate's one-based rank in modality $m$.
+
+*Note: Cross-encoder reranking is NOT implemented in the current retrieval pipeline. Retrieval uses RRF candidate rank fusion; reranking exists only as an architectural abstraction / future design option.*
+
+### Stage 3: Dual Evidence Corpus Segregation
+The pipeline retrieves evidence from two strictly segregated sources:
+- **Authoritative Telecom Knowledge Base**: Contains **45 synthetic-curated demonstration procedures** (`knowledge_base/seeds/v1/documents.json`). This corpus represents official, binding operational policy for telecom workflows (e.g., eSIM profiles, PUK resets, roaming provisioning).
+- **Historical Support Ticket Corpus**: Contains **61,765 tickets** from a heterogeneous public customer-support dataset. It is **not telecom-specific**. Historical agent answers are treated as unverified, imperfect historical evidence and are explicitly prevented from overriding KB procedures.
+
+### Stage 4: Grounded RAG Generation
+The service constructs an LLM prompt containing only bounded, retrieved evidence context:
+- KB evidence is placed under `AUTHORITATIVE KNOWLEDGE BASE EVIDENCE`.
+- Historical ticket evidence is placed under `HISTORICAL SUPPORT CASE EVIDENCE`.
+- Factual and procedural claims in the prompt are strictly restricted to the supplied evidence text.
+
+### Stage 5: Ollama Local LLM Execution
+The prompt is sent to Ollama running `qwen2.5:3b` via an OpenAI-compatible HTTP adapter (`LLMProvider`). The LLM returns a structured JSON payload containing a draft resolution summary, ordered action steps, procedural escalation guidance, and cited source IDs.
+
+### Stage 6: Citation Validation & Abstention Guardrails
+1. **Pre-Generation Abstention Check**: Before calling the LLM, the service evaluates retrieved KB evidence relevance. If no retrieved KB document satisfies either the minimum vector similarity floor (`RESOLUTION_MIN_KNOWLEDGE_SIMILARITY=0.40`) or lexical score floor (`RESOLUTION_MIN_KNOWLEDGE_LEXICAL_SCORE=0.50`), the system deterministically **abstains** (`abstained=true`) and returns escalation advice without invoking LLM generation.
+2. **Post-Generation Citation Validation**: If generation proceeds, the service programmatically inspects every citation ID emitted by the LLM. It verifies that each ID exists in the actual retrieved candidate set, derives citation titles/types from source metadata, and rejects fictitious or unretrieved document references.
+
+---
+
+## React/Vite Frontend Workspace
+
+The frontend (`frontend/`) provides an interactive React + Vite workspace designed for customer support agents:
+
+- **API Health Badge**: Continuously monitors backend status via `GET /healthz` and displays a live connection status indicator (`API available` / `API unavailable`).
+- **Complaint Input Form**: Allows agents to paste customer complaints and trigger resolution generation.
+- **Triage Card (`UnderstandingCard`)**: Displays the five structured classification badges (`intent`, `category`, `product`, `severity`, `sentiment`).
+- **Resolution & Action Steps (`ResolutionCard`)**: Displays the grounded resolution draft alongside numbered, step-by-step instructions.
+- **Escalation Guidance (`EscalationCard`)**: Provides procedural escalation instructions for cases requiring human supervisor intervention.
+- **Evidence & Citations (`EvidenceCard`)**: Lists validated evidence citations, distinguishing between authoritative KB procedures and historical support cases with source IDs and titles.
+- **Abstention Card (`AbstentionCard`)**: Renders a clear warning card when KB evidence is insufficient, directing the agent to standard escalation protocols.
+
+---
+
+## Design Decisions
+
+| Choice / Component | Engineering Rationale & Purpose |
+| :--- | :--- |
+| **PostgreSQL + pgvector** | Consolidates relational data, full-text lexical search (GIN index), and vector embeddings (HNSW index) within a single database system. Avoids operating a separate standalone search/vector cluster. |
+| **Hybrid Retrieval** | Combines dense semantic vector search (for concept matching and paraphrased complaints) with keyword search (for exact technical identifiers like `E4037`, device models, and acronyms). |
+| **Reciprocal Rank Fusion (RRF)** | Merges candidate rankings from semantic and lexical channels without requiring raw score normalization across incompatible scales (cosine distance vs. `ts_rank_cd`). |
+| **Multilingual MiniLM** | Uses `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions, 50+ languages). Supports both German and English tickets in the historical corpus with a fast, locally run open model. |
+| **Separate Telecom KB** | Keeps authoritative procedural guidance (45 synthetic-curated documents) isolated from heterogeneous historical customer support cases (61,765 tickets), ensuring unverified historical answers cannot override official policy. |
+| **Ollama / Qwen (`qwen2.5:3b`)** | Provides a fast, local, lightweight open LLM behind an OpenAI-compatible API interface, enabling local offline demonstration without paid third-party API dependencies. |
+| **Retrieval-Augmented Generation (RAG)** | Restricts LLM prompts to a bounded, retrieved set of evidence, keeping generated resolutions grounded in authoritative source text to prevent hallucination. |
+| **Citation Validation** | Programmatically inspects generated response references and verifies every citation against the actual retrieved evidence set, rejecting fictitious or unretrieved document references. |
+| **Abstention & Escalation** | Enforces deterministic vector similarity and lexical score floors before LLM generation. Automatically abstains or recommends escalation when retrieved knowledge evidence is insufficient. |
+
+---
+
+## Active API Endpoints
+
+The FastAPI backend exposes the following active endpoints:
+
+- `GET /healthz` - Health check returning `{"status": "ok"}`.
+- `POST /v1/retrieval/semantic` - Dense vector nearest-neighbor search over historical tickets.
+- `POST /v1/retrieval/hybrid` - Hybrid search (semantic + full-text RRF fusion) over historical tickets.
+- `POST /v1/knowledge/search` - Hybrid RRF search over the authoritative telecom knowledge base.
+- `POST /v1/complaints/understand` - Standalone complaint taxonomy classification (`intent`, `category`, `product`, `severity`, `sentiment`).
+- `POST /v1/resolutions` - End-to-end grounded RAG resolution generation with retrieval, taxonomy classification, citation validation, and abstention checks.
+
+*Note: Administrative or ingest endpoints such as `/v1/ingest`, `/v1/feedback`, or `/readyz` do not exist in the current codebase.*
+
+---
+
+## Configuration & `.env` Setup
+
+Runtime settings are backed by `app/core/config.py`. Copy `.env.example` to `.env` to configure environment settings:
+
+```bash
+cp .env.example .env
+```
+
+### Key Environment Variables
+- `APP_ENV`: Deployment environment (`development`).
+- `DATABASE_URL`: PostgreSQL connection string (default in Compose: `postgresql+psycopg://support:local-development-only@db:5432/support`; host execution: `postgresql+psycopg://support:local-development-only@localhost:5432/support`).
+- `EMBEDDING_MODEL`: Hugging Face model identifier (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
+- `EMBEDDING_MODEL_REVISION`: Optional pinned commit SHA for reproducible embeddings.
+- `SEMANTIC_CANDIDATE_LIMIT` & `LEXICAL_CANDIDATE_LIMIT`: Candidate pool sizes for historical ticket retrieval (default: `20`).
+- `KNOWLEDGE_SEMANTIC_CANDIDATE_LIMIT` & `KNOWLEDGE_LEXICAL_CANDIDATE_LIMIT`: Candidate pool sizes for KB retrieval (default: `20`).
+- `RRF_CONSTANT`: Reciprocal Rank Fusion constant $k$ (default: `60`).
+- `LLM_PROVIDER`: LLM mode (`disabled` or `openai-compatible`). Set to `openai-compatible` for local Ollama.
+- `LLM_BASE_URL`: Base URL for OpenAI-compatible endpoint (use `http://host.docker.internal:11434/v1` in Docker Compose or `http://localhost:11434/v1` on host).
+- `LLM_MODEL`: LLM model name (`qwen2.5:3b`).
+- `LLM_API_KEY`: API key for external providers (optional for local Ollama).
+- `RESOLUTION_MIN_KNOWLEDGE_SIMILARITY`: Minimum vector similarity floor for KB evidence (default: `0.40`).
+- `RESOLUTION_MIN_KNOWLEDGE_LEXICAL_SCORE`: Minimum lexical score floor for KB evidence (default: `0.50`).
+
+> [!IMPORTANT]
+> Secrets, credentials, `.env` files, and raw customer data must never be committed to Git repositories.
+
+---
+
+## Local Development & Ingestion Tooling
+
+### 1. Host Database Setup & Migrations
+```powershell
+# Start PostgreSQL container
+docker compose up -d db
+
+# Install development Python package
+pip install -e ".[dev]"
+
+# Set database connection and apply Alembic migrations
+$env:DATABASE_URL = "postgresql+psycopg://support:local-development-only@localhost:5432/support"
+alembic upgrade head
+
+# Run FastAPI backend locally
+uvicorn app.main:app --reload
+```
+
+### 2. Historical Ticket Ingestion
+Loads the `train` split of the **61,765 historical ticket** dataset into PostgreSQL:
 ```powershell
 $env:DATABASE_URL = "postgresql+psycopg://support:local-development-only@localhost:5432/support"
 python -m app.ingestion.cli "D:\College\customer-support-tickets"
 ```
+*(For a bounded smoke test, pass `--limit 10`.)*
 
-That command reads the existing local dataset in place. Do not copy it under this repository. The `.gitignore` excludes local data and common dataset file formats; the real dataset is not included in the test fixture or repository.
-
-For a bounded smoke run, pass `--limit 10`. The tests use ten synthetic records from `tests/fixtures/synthetic_historical_tickets.json`; they materialize a temporary saved `DatasetDict` and use in-memory SQLite. The fixture is not derived from the public dataset.
-
-## Historical ticket embeddings
-
-The embedding CLI creates vectors from each historical ticket's subject and body. It labels those fields in the input as `Subject:` and `Body:`, omits missing/blank fields, and skips a ticket when both are blank. The historical `answer` is deliberately excluded. Stored source text remains unchanged in `historical_tickets`.
-
-The configurable default is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`. The ingested corpus contains both German and English tickets, so this multilingual Sentence Transformers model is a better fit than an English-only model; its model card lists support for 50 languages. Its vector dimension is read from the loaded model rather than assumed. Change `EMBEDDING_MODEL` to select another compatible model. Set `EMBEDDING_MODEL_REVISION` to a pinned model commit for reproducibility and to keep different model revisions in separate embedding records. No paid embedding API is used.
-
-Install the optional local model dependency and run the migration/CLI:
-
+### 3. Historical Ticket Embeddings Generation
+Generates 384-dimensional embeddings for ticket subject and body:
 ```powershell
 pip install -e ".[embeddings,dev]"
 $env:DATABASE_URL = "postgresql+psycopg://support:local-development-only@localhost:5432/support"
@@ -53,82 +272,39 @@ alembic upgrade head
 python -m app.embeddings.cli --batch-size 64
 ```
 
-PostgreSQL must have the pgvector extension available; this project's Compose database image includes it. The migration enables the extension and adds `historical_ticket_embeddings`, keyed uniquely by ticket and model identifier. Each row also stores model dimension, source-text SHA-256, and timestamps. The pipeline reads tickets by primary-key pages and commits each batch separately. It reuses an embedding only when the model identifier, dimension, and exact subject/body hash match; changed text is regenerated, and an existing vector is removed if the source becomes empty. HNSW cosine indexes are created for the actual loaded model dimension and identifier so the migration does not guess vector width.
-
-The command prints JSON counters (`processed`, `embedded`, `reused`, `skipped_no_text`, `errors`), model identifier, dimension, and runtime. It logs periodic batch progress without ticket contents. Embeddings for different configured model identifiers can coexist, allowing later model changes without overwriting prior vectors. The historical dataset is still a heterogeneous public support corpus, not telecom data, and historical answers remain imperfect evidence.
-
-## Semantic retrieval
-
-POST /v1/retrieval/semantic embeds a complaint with the same configured multilingual Sentence Transformers model used for stored vectors, then asks PostgreSQL/pgvector for the nearest historical tickets. The query and index must share the same model and 384-dimensional vector space; retrieval filters by exact model identifier and dimension so vectors from other models are never mixed. PostgreSQL performs nearest-neighbor search with cosine distance and the matching HNSW cosine index; vectors are not loaded into application memory.
-
-top_k is request-configurable from 1 through 20 (default 5). The returned similarity is 1 - cosine_distance, so larger values mean closer vector directions for this query. It is a ranking signal, not a calibrated confidence, correctness, or resolution-quality score. Historical answers are returned as historical support evidence only.
-
-Example request:
-
-    {"query": "My mobile internet stopped working after switching to 5G", "top_k": 5}
-
-Each result includes the ticket subject/body/answer, queue/type/priority/language, tags, the similarity score, and source dataset/split/record/revision metadata. Raw vectors are never returned. The model loads once on the first retrieval request. The API needs DATABASE_URL and the optional embeddings dependency installed.
-
-## Hybrid retrieval
-
-POST /v1/retrieval/hybrid combines semantic candidates with PostgreSQL full-text candidates over subject and body; historical answers are excluded from lexical matching. PostgreSQL full-text search and a GIN index keep lexical retrieval in the existing database without another search service. The generated search vector uses the simple text configuration to avoid assuming the corpus is English-only and safely coalesces missing subject/body fields. The query builder removes common English/German function words and ORs the remaining terms so paraphrased complaints can still produce lexical candidates; ts_rank_cd rewards matches with more term coverage.
-
-The API fuses the two ordered candidate lists with Reciprocal Rank Fusion (RRF): each result receives 1 / (RRF constant + one-based rank) from each list where it appears. It combines ranks rather than averaging semantic and lexical scores whose scales differ. A ticket in both lists receives both contributions; candidates in only one list remain eligible. fused_score is a ranking value, not confidence. Responses retain modality ranks and scores for inspection.
-
-Defaults are 20 semantic candidates, 20 lexical candidates, final top_k 5 (maximum 20), and RRF constant 60. Configure candidate sizes and RRF_CONSTANT through environment variables. Increasing candidate limits can improve recall at additional query cost.
-
-## Telecom knowledge base
-
-The telecom KB is an independent, versioned source of synthetic curated domain guidance. The committed seed at `knowledge_base/seeds/v1/documents.json` contains 45 demonstration procedures labeled `synthetic-curated`; they are not proprietary carrier procedures. It is stored in `knowledge_documents` with its own `knowledge_document_embeddings` table. This keeps authoritative domain guidance distinct from heterogeneous historical customer-support cases and their imperfect agent answers.
-
-Apply the current migrations, install the optional embedding dependency, and ingest the small committed seed:
-
+### 4. Telecom Knowledge Base Ingestion
+Ingests the 45-document synthetic-curated telecom knowledge base seed:
 ```powershell
-pip install -e "[embeddings,dev]"
+pip install -e ".[embeddings,dev]"
 $env:DATABASE_URL = "postgresql+psycopg://support:local-development-only@localhost:5432/support"
 alembic upgrade head
 python -m app.knowledge.cli
 ```
 
-The seed may also be supplied as a positional JSON path; `--batch-size` controls embedding batches. Ingestion is idempotent and re-embeds a document only when its content or metadata hash changes. It does not read or update historical ticket embeddings.
-
-POST `/v1/knowledge/search` accepts `{"query":"E4037 eSIM activation failed","top_k":5}`. It returns document content and provenance/version plus semantic and lexical ranks/scores and their RRF score; vectors are never exposed. Exact technical identifiers such as `E4037` benefit from PostgreSQL lexical matching, while semantic embeddings can find eSIM guidance for paraphrases such as “my digital SIM won't activate” that omit the code. Both use PostgreSQL/pgvector already operated by the service, avoiding an additional search database and keeping the demo's stores and operations simple.
-
-The resolution service combines the authoritative telecom KB and historical ticket corpus as distinct source types, preserves their provenance, validates citations against retrieved evidence, and abstains/escalates when relevant KB evidence is insufficient.
-
-## Grounded resolution generation
-
-POST `/v1/resolutions` accepts a complaint and returns a resolution, ordered steps, escalation advice, validated citations, and an `abstained` flag. RAG means retrieval-augmented generation here: retrieval runs first, then only a bounded set of retrieved evidence is given to the LLM. The service uses existing hybrid RRF order for both corpora. It places telecom KB procedures under `AUTHORITATIVE KNOWLEDGE BASE EVIDENCE` and historical cases under `HISTORICAL SUPPORT CASE EVIDENCE`; historical agent answers are explicitly unverified context and cannot override KB procedures.
-
-The prompt restricts factual/procedural claims to supplied evidence and requires stable source IDs for citations. The application checks those IDs against its actual retrieval set, derives citation type/title from that set, and rejects unknown IDs. This validation is necessary because an LLM can emit plausible but nonexistent citations. Before generation, the service deterministically abstains unless a KB hit clears the configured semantic similarity or lexical-score threshold. This prevents historical cases or a nearest-neighbor result with weak relevance from becoming unsupported instructions. No numeric confidence is requested or returned.
-
-The LLM adapter is a small OpenAI Chat Completions-compatible HTTP client behind `LLMProvider`; it does not tie the service to an SDK or vendor. To enable it, set `LLM_PROVIDER=openai-compatible`, `LLM_MODEL` to a model name supported by the endpoint, optionally set `LLM_BASE_URL`, and provide `LLM_API_KEY` through the local environment or secret manager. For a local OpenAI-compatible service the key may be omitted. `LLM_PROVIDER=disabled` is the default; the resolution endpoint returns 503 until configured. Evidence limits default to 5 KB documents and 4 historical tickets (maximum 5 each). KB relevance floors default to semantic similarity 0.40 or lexical score 0.50 and should be tuned with recorded evaluation results.
-
-## Structured complaint understanding
-
-POST `/v1/complaints/understand` returns controlled `intent`, `category`, `product`, `severity`, and `sentiment` labels. Configure the evolving intent/category/product lists with `COMPLAINT_INTENTS`, `COMPLAINT_CATEGORIES`, and `COMPLAINT_PRODUCTS` (comma-separated normalized labels); each list must include `unknown`. The parser validates the provider's structured response and falls back to `unknown` only when the model reports it, rather than accepting an invented class. Deterministic severity overrides mark explicit SIM-swap/security compromise and complete outage reports high, and general inquiries low. These simple rules do not replace policy-based triage, and sentiment is informational only. `POST /v1/resolutions` runs the same parser before retrieval and includes the structured fields in its response. Classification quality remains unevaluated until a reviewed, versioned label set is scored.
-
-## Evaluation baseline
-
-Three small manually curated datasets cover complaint understanding, telecom KB retrieval, and abstention. After configuring the same database, embedding model, and LLM provider as the API, run:
-
+### 5. Evaluation Baseline CLI
+Runs evaluation baselines across complaint understanding, retrieval, and abstention test suites:
 ```powershell
 python -m app.evaluation.cli
 ```
+Reports are written to `evaluation/reports/`. *Note: Baseline suites are smoke-testing tools for development, not production benchmark evidence.*
 
-The command uses existing application services and writes JSON and Markdown baseline reports under `evaluation/reports/` after successful completion. Select one suite with `--suite complaint_understanding`, `--suite retrieval`, or `--suite abstention`. Metrics and label limitations are documented in [the evaluation guide](evaluation/README.md). These small datasets are not production-quality benchmark evidence; no answer correctness or hallucination metric is reported.
+---
 
-## Project map
+## Project Structure
 
-- `app/domain`: shared domain types and provider/storage protocols.
-- `app/ingestion`: row validation, normalization, and ingestion orchestration.
-- `app/services`: semantic and hybrid retrieval orchestration.
-- `app/infrastructure/datasets`: Hugging Face saved-dataset adapter.
-- `app/infrastructure/persistence`: SQLAlchemy models, database setup, and repository.
-- `app/api`: HTTP routes and request/response boundary.
-- `app/core`: runtime settings and cross-cutting application concerns.
-- `tests`: unit and API test suites.
-- `docs`: architecture and evaluation plans.
-- `migrations`: Alembic schema revisions.
+- `app/domain`: Core domain models, taxonomy definitions, and port interfaces (`ports.py`).
+- `app/ingestion`: Row validation, normalization, and CLI for historical ticket dataset ingestion.
+- `app/embeddings`: Embeddings generation CLI and batch workers.
+- `app/knowledge`: Telecom knowledge base models and ingestion CLI.
+- `app/services`: Application orchestration (semantic retrieval, hybrid retrieval, complaint understanding, resolution generation).
+- `app/infrastructure`: Concrete adapters for persistence (SQLAlchemy + pgvector), embeddings (SentenceTransformers), and LLM generation (OpenAI-compatible client).
+- `app/api`: FastAPI HTTP endpoints and request/response models.
+- `app/core`: Application configuration (`config.py`).
+- `frontend`: React + Vite frontend UI workspace.
+- `migrations`: Alembic database schema migrations.
+- `tests`: Unit and API integration test suites.
+- `docs`: Architecture specifications and evaluation documentation.
 
-See [architecture](docs/architecture.md), [evaluation](docs/evaluation.md), and [development rules](AGENTS.md).
+---
+
+See [AGENTS.md](AGENTS.md) for development rules and project constraints.
